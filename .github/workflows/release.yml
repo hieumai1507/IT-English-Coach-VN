@@ -1,0 +1,59 @@
+# On version tags, build and attach web + API bundles to the GitHub release.
+# Example: git tag v1.0.0 && git push origin v1.0.0
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  CI: "true"
+  PORT: "5173"
+  BASE_PATH: "/"
+  NODE_ENV: "production"
+
+jobs:
+  build-and-attach:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck and build
+        run: pnpm run build
+
+      - name: Pack web (Vite) output
+        run: tar -czvf web-dist.tar.gz -C artifacts/english-practice/dist/public .
+
+      - name: Pack API server bundle
+        run: tar -czvf api-dist.tar.gz -C artifacts/api-server/dist .
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            web-dist.tar.gz
+            api-dist.tar.gz
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

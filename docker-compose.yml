@@ -1,0 +1,18 @@
+# Local PostgreSQL for development. Start: docker compose up -d
+# Host port 5433 avoids clashing with a system Postgres on 5432.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: english-practice-db
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: english_practice
+    volumes:
+      - english_practice_pgdata:/var/lib/postgresql/data
+
+volumes:
+  english_practice_pgdata:
