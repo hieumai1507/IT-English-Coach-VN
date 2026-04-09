@@ -7,9 +7,11 @@
  */
 
 export interface OpenaiMessage {
-  id: number;
-  conversationId: number;
+  id: string;
+  conversationId: string;
   role: string;
   content: string;
   createdAt: Date;
+  updatedAt: Date;
+  deletedAt?: Date | null;
 }

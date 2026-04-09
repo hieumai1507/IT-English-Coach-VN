@@ -1,7 +1,10 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
-import { conversations as conversationsTable, messages } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { 
+  conversationRepo, 
+  messageRepo,
+  Conversation,
+  Message
+} from "@workspace/db";
 import {
   CreateOpenaiConversationBody,
   SendOpenaiMessageBody,
@@ -21,12 +24,9 @@ import {
 const router = Router();
 
 router.get("/openai/conversations", async (req, res) => {
-  const rows = await db
-    .select()
-    .from(conversationsTable)
-    .orderBy(conversationsTable.createdAt);
+  const rows = await conversationRepo.findAll();
   res.json(
-    rows.map((c) => ({
+    rows.map((c: Conversation) => ({
       id: c.id,
       title: c.title,
       createdAt: c.createdAt,
@@ -36,72 +36,55 @@ router.get("/openai/conversations", async (req, res) => {
 
 router.post("/openai/conversations", async (req, res) => {
   const body = CreateOpenaiConversationBody.parse(req.body);
-  const [conv] = await db
-    .insert(conversationsTable)
-    .values({ title: body.title })
-    .returning();
+  const conv = await conversationRepo.create({ title: body.title });
   res.status(201).json({ id: conv.id, title: conv.title, createdAt: conv.createdAt });
 });
 
 router.get("/openai/conversations/:id", async (req, res) => {
-  const { id } = GetOpenaiConversationParams.parse({ id: parseInt(req.params.id) });
-  const [conv] = await db
-    .select()
-    .from(conversationsTable)
-    .where(eq(conversationsTable.id, id));
+  const { id } = GetOpenaiConversationParams.parse({ id: req.params.id });
+  const conv = await conversationRepo.findOneById(id);
   if (!conv) {
     res.status(404).json({ error: "Conversation not found" });
     return;
   }
-  const msgs = await db
-    .select()
-    .from(messages)
-    .where(eq(messages.conversationId, id))
-    .orderBy(messages.createdAt);
+  const msgs = await messageRepo.findAll();
+  const conversationMessages = msgs.filter((m: Message) => m.conversationId === id);
+  
   res.json({
     id: conv.id,
     title: conv.title,
     createdAt: conv.createdAt,
-    messages: msgs,
+    messages: conversationMessages,
   });
 });
 
 router.delete("/openai/conversations/:id", async (req, res) => {
-  const { id } = DeleteOpenaiConversationParams.parse({ id: parseInt(req.params.id) });
-  const [conv] = await db
-    .select()
-    .from(conversationsTable)
-    .where(eq(conversationsTable.id, id));
-  if (!conv) {
+  const { id } = DeleteOpenaiConversationParams.parse({ id: req.params.id });
+  const exists = await conversationRepo.exists(id);
+  if (!exists) {
     res.status(404).json({ error: "Conversation not found" });
     return;
   }
-  await db.delete(messages).where(eq(messages.conversationId, id));
-  await db.delete(conversationsTable).where(eq(conversationsTable.id, id));
+  // Soft delete the conversation. 
+  // We can also soft delete messages if we want, but filtering at query time is enough.
+  await conversationRepo.softDelete(id);
   res.status(204).end();
 });
 
 router.get("/openai/conversations/:id/messages", async (req, res) => {
-  const { id } = ListOpenaiMessagesParams.parse({ id: parseInt(req.params.id) });
-  const msgs = await db
-    .select()
-    .from(messages)
-    .where(eq(messages.conversationId, id))
-    .orderBy(messages.createdAt);
-  res.json(msgs);
+  const { id } = ListOpenaiMessagesParams.parse({ id: req.params.id });
+  const msgs = await messageRepo.findAll();
+  res.json(msgs.filter((m: Message) => m.conversationId === id));
 });
 
 router.post("/openai/conversations/:id/messages", async (req, res) => {
-  const { id } = SendOpenaiMessageParams.parse({ id: parseInt(req.params.id) });
+  const { id } = SendOpenaiMessageParams.parse({ id: req.params.id });
   const body = SendOpenaiMessageBody.parse(req.body);
 
-  const existingMessages = await db
-    .select()
-    .from(messages)
-    .where(eq(messages.conversationId, id))
-    .orderBy(messages.createdAt);
+  const msgs = await messageRepo.findAll();
+  const existingMessages = msgs.filter((m: Message) => m.conversationId === id);
 
-  await db.insert(messages).values({
+  await messageRepo.create({
     conversationId: id,
     role: "user",
     content: body.content,
@@ -113,18 +96,21 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
 
   let fullResponse = "";
 
-  const chatMessages = existingMessages.map((m) => ({
+  const chatMessages = existingMessages.map((m: Message) => ({
     role: m.role as "user" | "assistant",
     content: m.content,
   }));
   chatMessages.push({ role: "user", content: body.content });
 
+  const controller = new AbortController();
+  res.on("close", () => controller.abort());
+
   const stream = await openai.chat.completions.create({
-    model: "gpt-5.2",
+    model: "gpt-4o-mini",
     max_completion_tokens: 8192,
     messages: chatMessages,
     stream: true,
-  });
+  }, { signal: controller.signal });
 
   for await (const chunk of stream) {
     const content = chunk.choices[0]?.delta?.content;
@@ -134,7 +120,7 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
     }
   }
 
-  await db.insert(messages).values({
+  await messageRepo.create({
     conversationId: id,
     role: "assistant",
     content: fullResponse,
@@ -145,7 +131,7 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
 });
 
 router.post("/openai/conversations/:id/voice-messages", async (req, res) => {
-  const { id } = SendOpenaiVoiceMessageParams.parse({ id: parseInt(req.params.id) });
+  const { id } = SendOpenaiVoiceMessageParams.parse({ id: req.params.id });
   const body = SendOpenaiVoiceMessageBody.parse(req.body);
 
   const audioBuffer = Buffer.from(body.audio, "base64");
@@ -160,7 +146,11 @@ router.post("/openai/conversations/:id/voice-messages", async (req, res) => {
   res.setHeader("Connection", "keep-alive");
 
   const { buffer, format } = await ensureCompatibleFormat(audioBuffer);
-  const stream = await voiceChatStream(buffer, "alloy", format);
+  
+  const controller = new AbortController();
+  res.on("close", () => controller.abort());
+
+  const stream = await voiceChatStream(buffer, "alloy", format, { signal: controller.signal });
 
   let assistantTranscript = "";
   let userTranscript = "";
@@ -175,14 +165,14 @@ router.post("/openai/conversations/:id/voice-messages", async (req, res) => {
   }
 
   if (userTranscript) {
-    await db.insert(messages).values({
+    await messageRepo.create({
       conversationId: id,
       role: "user",
       content: userTranscript,
     });
   }
   if (assistantTranscript) {
-    await db.insert(messages).values({
+    await messageRepo.create({
       conversationId: id,
       role: "assistant",
       content: assistantTranscript,

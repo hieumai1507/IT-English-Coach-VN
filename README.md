@@ -10,7 +10,7 @@ This guide explains how to run the monorepo on your machine (outside Replit). Af
 
 ## 1. Install dependencies
 
-From the `English-Practice-Bot` directory:
+From the repo root:
 
 ```bash
 pnpm install
@@ -34,7 +34,7 @@ Adjust the following for your environment:
 | `BASE_PATH` | Usually `/` for local development. |
 | `API_PROXY_TARGET` | API base URL for Vite to proxy `/api` during dev — e.g. `http://127.0.0.1:3000` (must match the API `PORT`). |
 
-Place `.env` at the **root** of `English-Practice-Bot/`. Vite is configured with `envDir` so it loads this file.
+Place `.env` at the **root** of the repository. Vite is configured with `envDir` so it loads this file.
 
 ## 3. PostgreSQL
 
@@ -59,21 +59,23 @@ pnpm db:push
 pnpm db:seed
 ```
 
-- `db:push`: applies the Drizzle schema to the database.
-- `db:seed`: inserts the eight practice scenarios (runs only when the `scenarios` table is empty).
+- `db:push`: applies the Drizzle schema to the database. All tables include lifecycle columns (`id`, `createdAt`, `updatedAt`, `deletedAt`) managed automatically.
+- `db:seed`: truncates and re-inserts the eight built-in practice scenarios with auto-generated **16-character NanoIDs**.
+
+> **Note on soft deletes:** Records deleted via the UI are marked with a `deletedAt` timestamp and filtered out from all queries automatically. They are not physically removed.
 
 ## 5. Run the app (two terminals)
 
 **Terminal 1 — API:**
 
 ```bash
-set -a && source .env && set +a && pnpm dev:api
+pnpm dev:api
 ```
 
 **Terminal 2 — web UI:**
 
 ```bash
-set -a && source .env && set +a && pnpm dev:web
+pnpm dev:web
 ```
 
 Open the app at `http://localhost:<VITE_PORT>` (set `VITE_PORT=5173` in `.env` as in `.env.example`).
@@ -82,24 +84,34 @@ Open the app at `http://localhost:<VITE_PORT>` (set `VITE_PORT=5173` in `.env` a
 
 ## 6. Quick checks
 
-- API: look for a “Server listening” log and try `GET /api/healthz` (or the health route defined in the project’s OpenAPI spec).
+- API: look for a "Server listening" log and try `GET /api/healthz`.
 - Voice/chat errors: verify the key, quota, and models; the app uses OpenAI via the `AI_INTEGRATIONS_*` variables.
 
 ## Useful commands (root `package.json`)
 
 | Command | Description |
 |---------|-------------|
-| `pnpm run typecheck` | Typecheck the whole workspace |
-| `pnpm db:push` | Push Drizzle schema |
-| `pnpm db:seed` | Seed scenarios |
-| `pnpm dev:api` | Run the API server in dev |
-| `pnpm dev:web` | Run the Vite frontend in dev |
+| `pnpm run typecheck` | Typecheck the whole monorepo |
+| `pnpm db:push` | Push Drizzle schema to database |
+| `pnpm db:seed` | Truncate & re-seed practice scenarios |
+| `pnpm dev:api` | Run the API server in dev mode |
+| `pnpm dev:web` | Run the Vite frontend in dev mode |
 
 For package layout and stack details, see `replit.md`.
 
+## Architecture overview
+
+| Layer | Package | Description |
+|-------|---------|-------------|
+| Database | `@workspace/db` | Drizzle ORM + PostgreSQL. Exports a `BaseRepository` abstraction with soft-delete, `findAll`, `findOneById`, `create`, `update` and `softDelete` methods. All entity IDs use 16-character alphanumeric NanoIDs. |
+| API validation | `@workspace/api-zod` | Auto-generated Zod schemas from the OpenAPI spec in `lib/api-spec`. Re-run codegen with `pnpm --filter @workspace/api-spec run codegen`. |
+| API client | `@workspace/api-client-react` | Auto-generated React Query hooks for the frontend. |
+| API server | `@workspace/api-server` | Express routes for `/practice/*` and `/openai/*`. |
+| Frontend | `@workspace/english-practice` | Vite + React SPA. State managed with Zustand. |
+
 ## CI / CD (GitHub Actions)
 
-Workflows live under `.github/workflows/` (this folder is inside `English-Practice-Bot/` — use that directory as the **git repository root** when you push to GitHub).
+Workflows live under `.github/workflows/`.
 
 ### CI (`ci.yml`)
 
@@ -127,7 +139,3 @@ git push origin v1.0.0
 ```
 
 Deploy those artifacts on your host (VM, container platform, etc.) and configure runtime env (`DATABASE_URL`, OpenAI keys, `PORT`) on the server.
-
-### Monorepo note
-
-If your git root is **above** `English-Practice-Bot/` (e.g. a parent folder holds multiple projects), move `.github` to that repository root and add `defaults.run.working-directory: English-Practice-Bot` to each job, or run CI only from a dedicated repo whose root is `English-Practice-Bot/`.

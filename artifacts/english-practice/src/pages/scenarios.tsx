@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useLocation } from "wouter";
 import { useListScenarios, getListScenariosQueryKey, useCreateSession } from "@workspace/api-client-react";
+import { useScenarioStore } from "@/stores/useScenarioStore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,23 +31,24 @@ export default function Scenarios() {
   const queryClient = useQueryClient();
   const { data: scenarios, isLoading } = useListScenarios({ query: { queryKey: getListScenariosQueryKey() } });
   const createSession = useCreateSession();
-  const [startingId, setStartingId] = useState<number | null>(null);
-  const [openCreateDialog, setOpenCreateDialog] = useState(false);
-  const [newScenario, setNewScenario] = useState({
-    name: "",
-    description: "",
-    category: "communication",
-    difficulty: "intermediate",
-    icon: "default",
-    systemPrompt: "",
-  });
+  const { 
+    openCreateDialog, 
+    setOpenCreateDialog, 
+    newScenario, 
+    setNewScenario, 
+    resetNewScenario 
+  } = useScenarioStore();
+
+  const [startingId, setStartingId] = useState<string | null>(null);
+
   const { data: categoriesData } = useQuery({
     queryKey: ["/api/practice/categories"],
     queryFn: async () => {
       const resp = await fetch("/api/practice/categories");
       if (!resp.ok) throw new Error("Failed to load categories");
-      return (await resp.json()) as Array<{ id: number; name: string }>;
+      return (await resp.json()) as Array<{ id: string; name: string }>;
     },
+    enabled: openCreateDialog, // Lazy load: only fetch when dialog is open
   });
 
   const createCategoryMutation = useMutation({
@@ -57,7 +59,7 @@ export default function Scenarios() {
         body: JSON.stringify({ name }),
       });
       if (!resp.ok) throw new Error("Failed to create category");
-      return (await resp.json()) as { id: number; name: string };
+      return (await resp.json()) as { id: string; name: string };
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["/api/practice/categories"] });
@@ -79,18 +81,11 @@ export default function Scenarios() {
         body: JSON.stringify(payload),
       });
       if (!resp.ok) throw new Error("Failed to create scenario");
-      return resp.json();
+      return resp.json() as Promise<{ id: string }>;
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: getListScenariosQueryKey() });
-      setNewScenario({
-        name: "",
-        description: "",
-        category: "communication",
-        difficulty: "intermediate",
-        icon: "default",
-        systemPrompt: "",
-      });
+      resetNewScenario();
       setOpenCreateDialog(false);
       toast({
         title: t.scenarios.addSuccessTitle,
@@ -117,7 +112,7 @@ export default function Scenarios() {
     return Array.from(all).map((value) => ({ value, label: value }));
   }, [scenarios, categoriesData]);
 
-  const handleStart = (scenarioId: number) => {
+  const handleStart = (scenarioId: string) => {
     setStartingId(scenarioId);
     createSession.mutate({ data: { scenarioId } }, {
       onSuccess: (data) => {
@@ -173,7 +168,7 @@ export default function Scenarios() {
               <Input
                 id="scenario-name"
                 value={newScenario.name}
-                onChange={(e) => setNewScenario((s) => ({ ...s, name: e.target.value }))}
+                onChange={(e) => setNewScenario({ name: e.target.value })}
                 placeholder="Incident postmortem meeting"
               />
             </div>
@@ -183,14 +178,14 @@ export default function Scenarios() {
                 id="scenario-category"
                 value={newScenario.category}
                 options={categoryOptions}
-                onValueChange={(value) => setNewScenario((s) => ({ ...s, category: value }))}
+                onValueChange={(value) => setNewScenario({ category: value })}
                 onCreateOption={(created) => {
                   const normalized = created.trim();
                   if (!normalized) return;
                   createCategoryMutation.mutate(normalized, {
                     onSuccess: (category) => {
                       if (!category?.name) return;
-                      setNewScenario((s) => ({ ...s, category: category.name }));
+                      setNewScenario({ category: category.name });
                     },
                   });
                 }}
@@ -202,7 +197,7 @@ export default function Scenarios() {
                 id="scenario-difficulty"
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 value={newScenario.difficulty}
-                onChange={(e) => setNewScenario((s) => ({ ...s, difficulty: e.target.value }))}
+                onChange={(e) => setNewScenario({ difficulty: e.target.value })}
               >
                 <option value="beginner">beginner</option>
                 <option value="intermediate">intermediate</option>
@@ -214,7 +209,7 @@ export default function Scenarios() {
               <Input
                 id="scenario-icon"
                 value={newScenario.icon}
-                onChange={(e) => setNewScenario((s) => ({ ...s, icon: e.target.value }))}
+                onChange={(e) => setNewScenario({ icon: e.target.value })}
                 placeholder="standup | code_review | interview | meeting | default"
               />
             </div>
@@ -223,7 +218,7 @@ export default function Scenarios() {
               <Textarea
                 id="scenario-description"
                 value={newScenario.description}
-                onChange={(e) => setNewScenario((s) => ({ ...s, description: e.target.value }))}
+                onChange={(e) => setNewScenario({ description: e.target.value })}
                 placeholder="You are discussing root causes and preventive actions after an outage."
                 rows={3}
               />
@@ -233,7 +228,7 @@ export default function Scenarios() {
               <Textarea
                 id="scenario-prompt"
                 value={newScenario.systemPrompt}
-                onChange={(e) => setNewScenario((s) => ({ ...s, systemPrompt: e.target.value }))}
+                onChange={(e) => setNewScenario({ systemPrompt: e.target.value })}
                 placeholder="Role-play as the engineering manager. Ask follow-up questions and keep context realistic."
                 rows={6}
               />

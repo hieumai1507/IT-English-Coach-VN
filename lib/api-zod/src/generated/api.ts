@@ -19,9 +19,11 @@ export const HealthCheckResponse = zod.object({
  * @summary List all conversations
  */
 export const ListOpenaiConversationsResponseItem = zod.object({
-  id: zod.number(),
+  id: zod.string(),
   title: zod.string(),
   createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+  deletedAt: zod.coerce.date().nullish(),
 });
 export const ListOpenaiConversationsResponse = zod.array(
   ListOpenaiConversationsResponseItem,
@@ -38,20 +40,22 @@ export const CreateOpenaiConversationBody = zod.object({
  * @summary Get conversation with messages
  */
 export const GetOpenaiConversationParams = zod.object({
-  id: zod.coerce.number(),
+  id: zod.coerce.string(),
 });
 
 export const GetOpenaiConversationResponse = zod.object({
-  id: zod.number(),
+  id: zod.string(),
   title: zod.string(),
   createdAt: zod.coerce.date(),
   messages: zod.array(
     zod.object({
-      id: zod.number(),
-      conversationId: zod.number(),
+      id: zod.string(),
+      conversationId: zod.string(),
       role: zod.string(),
       content: zod.string(),
       createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
+      deletedAt: zod.coerce.date().nullish(),
     }),
   ),
 });
@@ -60,22 +64,24 @@ export const GetOpenaiConversationResponse = zod.object({
  * @summary Delete a conversation
  */
 export const DeleteOpenaiConversationParams = zod.object({
-  id: zod.coerce.number(),
+  id: zod.coerce.string(),
 });
 
 /**
  * @summary List messages in a conversation
  */
 export const ListOpenaiMessagesParams = zod.object({
-  id: zod.coerce.number(),
+  id: zod.coerce.string(),
 });
 
 export const ListOpenaiMessagesResponseItem = zod.object({
-  id: zod.number(),
-  conversationId: zod.number(),
+  id: zod.string(),
+  conversationId: zod.string(),
   role: zod.string(),
   content: zod.string(),
   createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+  deletedAt: zod.coerce.date().nullish(),
 });
 export const ListOpenaiMessagesResponse = zod.array(
   ListOpenaiMessagesResponseItem,
@@ -85,7 +91,7 @@ export const ListOpenaiMessagesResponse = zod.array(
  * @summary Send a text message and receive a streaming text response
  */
 export const SendOpenaiMessageParams = zod.object({
-  id: zod.coerce.number(),
+  id: zod.coerce.string(),
 });
 
 export const SendOpenaiMessageBody = zod.object({
@@ -96,7 +102,7 @@ export const SendOpenaiMessageBody = zod.object({
  * @summary Send audio and receive a streaming voice response
  */
 export const SendOpenaiVoiceMessageParams = zod.object({
-  id: zod.coerce.number(),
+  id: zod.coerce.string(),
 });
 
 export const SendOpenaiVoiceMessageBody = zod.object({
@@ -107,13 +113,16 @@ export const SendOpenaiVoiceMessageBody = zod.object({
  * @summary List all IT English practice scenarios
  */
 export const ListScenariosResponseItem = zod.object({
-  id: zod.number(),
+  id: zod.string(),
   name: zod.string(),
   description: zod.string(),
   category: zod.string(),
   difficulty: zod.string(),
   systemPrompt: zod.string(),
   icon: zod.string(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+  deletedAt: zod.coerce.date().nullish(),
 });
 export const ListScenariosResponse = zod.array(ListScenariosResponseItem);
 
@@ -121,14 +130,16 @@ export const ListScenariosResponse = zod.array(ListScenariosResponseItem);
  * @summary List practice sessions for history
  */
 export const ListSessionsResponseItem = zod.object({
-  id: zod.number(),
-  scenarioId: zod.number(),
-  conversationId: zod.number(),
+  id: zod.string(),
+  scenarioId: zod.string(),
+  conversationId: zod.string(),
   scenarioName: zod.string(),
   durationSeconds: zod.number().nullable(),
   feedback: zod.string().nullable(),
   score: zod.number().nullable(),
   createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+  deletedAt: zod.coerce.date().nullish(),
 });
 export const ListSessionsResponse = zod.array(ListSessionsResponseItem);
 
@@ -136,20 +147,20 @@ export const ListSessionsResponse = zod.array(ListSessionsResponseItem);
  * @summary Create a new practice session
  */
 export const CreateSessionBody = zod.object({
-  scenarioId: zod.number(),
+  scenarioId: zod.string(),
 });
 
 /**
  * @summary Get a session with messages
  */
 export const GetSessionParams = zod.object({
-  id: zod.coerce.number(),
+  id: zod.coerce.string(),
 });
 
 export const GetSessionResponse = zod.object({
-  id: zod.number(),
-  scenarioId: zod.number(),
-  conversationId: zod.number(),
+  id: zod.string(),
+  scenarioId: zod.string(),
+  conversationId: zod.string(),
   scenarioName: zod.string(),
   durationSeconds: zod.number().nullable(),
   feedback: zod.string().nullable(),
@@ -157,21 +168,26 @@ export const GetSessionResponse = zod.object({
   createdAt: zod.coerce.date(),
   messages: zod.array(
     zod.object({
-      id: zod.number(),
-      conversationId: zod.number(),
+      id: zod.string(),
+      conversationId: zod.string(),
       role: zod.string(),
       content: zod.string(),
       createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
+      deletedAt: zod.coerce.date().nullish(),
     }),
   ),
   scenario: zod.object({
-    id: zod.number(),
+    id: zod.string(),
     name: zod.string(),
     description: zod.string(),
     category: zod.string(),
     difficulty: zod.string(),
     systemPrompt: zod.string(),
     icon: zod.string(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+    deletedAt: zod.coerce.date().nullish(),
   }),
 });
 
@@ -179,7 +195,7 @@ export const GetSessionResponse = zod.object({
  * @summary Generate AI feedback for a practice session
  */
 export const GenerateFeedbackParams = zod.object({
-  id: zod.coerce.number(),
+  id: zod.coerce.string(),
 });
 
 export const GenerateFeedbackResponse = zod.object({
@@ -198,14 +214,16 @@ export const GetPracticeStatsResponse = zod.object({
   sessionsByCategory: zod.record(zod.string(), zod.number()),
   recentSessions: zod.array(
     zod.object({
-      id: zod.number(),
-      scenarioId: zod.number(),
-      conversationId: zod.number(),
+      id: zod.string(),
+      scenarioId: zod.string(),
+      conversationId: zod.string(),
       scenarioName: zod.string(),
       durationSeconds: zod.number().nullable(),
       feedback: zod.string().nullable(),
       score: zod.number().nullable(),
       createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
+      deletedAt: zod.coerce.date().nullish(),
     }),
   ),
 });

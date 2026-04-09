@@ -8,7 +8,7 @@
 import type { OpenaiMessage } from "./openaiMessage";
 
 export interface OpenaiConversationWithMessages {
-  id: number;
+  id: string;
   title: string;
   createdAt: Date;
   messages: OpenaiMessage[];

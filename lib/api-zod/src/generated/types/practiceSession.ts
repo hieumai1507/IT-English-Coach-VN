@@ -7,12 +7,14 @@
  */
 
 export interface PracticeSession {
-  id: number;
-  scenarioId: number;
-  conversationId: number;
+  id: string;
+  scenarioId: string;
+  conversationId: string;
   scenarioName: string;
   durationSeconds: number | null;
   feedback: string | null;
   score: number | null;
   createdAt: Date;
+  updatedAt: Date;
+  deletedAt?: Date | null;
 }

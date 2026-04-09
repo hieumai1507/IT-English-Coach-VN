@@ -3,8 +3,9 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
-    "dev": "bash -lc 'set -a && source .env && set +a && pnpm -r --parallel --filter @workspace/api-server --filter @workspace/english-practice run dev'",
+    "preinstall": "node -e \"if(process.env.npm_execpath.indexOf('pnpm') === -1) {console.error('Use pnpm instead'); process.exit(1);}\"",
+    "dev": "dotenv -e .env -- pnpm -r --parallel --filter @workspace/api-server --filter @workspace/english-practice run dev",
+    "dev:win": "pnpm -r --parallel --filter @workspace/api-server --filter @workspace/english-practice run dev",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
@@ -15,7 +16,13 @@
   },
   "private": true,
   "devDependencies": {
-    "typescript": "~5.9.2",
-    "prettier": "^3.8.1"
+    "@types/nanoid": "^3.0.0",
+    "dotenv-cli": "^11.0.0",
+    "prettier": "^3.8.1",
+    "typescript": "~5.9.2"
+  },
+  "dependencies": {
+    "nanoid": "^5.1.7",
+    "zustand": "^5.0.12"
   }
 }

@@ -82,23 +82,20 @@ const SCENARIOS = [
 ] as const;
 
 async function main() {
+  console.log("Truncating tables for fresh start...");
+  // Use sql.raw because truncation requires direct SQL and cascade to handle foreign keys
+  await db.execute(sql`TRUNCATE TABLE messages, conversations, practice_sessions, scenarios, categories CASCADE`);
+
   const categoryNames = Array.from(new Set(SCENARIOS.map((s) => s.category)));
+  console.log("Seeding categories...");
   await db
     .insert(categoriesTable)
     .values(categoryNames.map((name) => ({ name })))
     .onConflictDoNothing({ target: categoriesTable.name });
 
-  const [{ count }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(scenariosTable);
-
-  if (count > 0) {
-    console.log(`Scenarios table already has ${count} row(s); skipping seed.`);
-    process.exit(0);
-  }
-
+  console.log("Seeding scenarios...");
   await db.insert(scenariosTable).values([...SCENARIOS]);
-  console.log(`Inserted ${SCENARIOS.length} scenarios.`);
+  console.log(`Inserted ${SCENARIOS.length} scenarios with new 16-char NanoIDs.`);
   process.exit(0);
 }
 

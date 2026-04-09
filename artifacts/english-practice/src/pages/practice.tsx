@@ -48,12 +48,11 @@ function useTimer() {
 }
 
 export default function Practice() {
-  const { sessionId: sessionIdParam } = useParams<{ sessionId: string }>();
-  const sessionId = parseInt(sessionIdParam ?? "0");
+  const { sessionId } = useParams<{ sessionId: string }>();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
-  const [convId, setConvId] = useState<number>(0);
+  const [convId, setConvId] = useState<string>("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessionEnded, setSessionEnded] = useState(false);
   const [feedback, setFeedback] = useState<{ feedback: string; score: number; suggestions: string[] } | null>(null);
@@ -65,10 +64,10 @@ export default function Practice() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const timer = useTimer();
 
-  const { data: session, isLoading } = useGetSession(sessionId > 0 ? sessionId : 0, {
+  const { data: session, isLoading } = useGetSession(sessionId ?? "", {
     query: {
-      enabled: sessionId > 0,
-      queryKey: getGetSessionQueryKey(sessionId),
+      enabled: !!sessionId,
+      queryKey: getGetSessionQueryKey(sessionId ?? ""),
     },
   });
 
@@ -147,7 +146,9 @@ export default function Practice() {
         `/api/openai/conversations/${convId}/voice-messages`,
         blob
       );
-      await queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
+      if (sessionId) {
+        await queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
+      }
     } catch (err: any) {
       const msg = err?.message ?? String(err);
       if (!micError) {

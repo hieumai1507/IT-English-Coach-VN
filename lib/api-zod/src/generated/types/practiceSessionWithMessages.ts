@@ -9,9 +9,9 @@ import type { OpenaiMessage } from "./openaiMessage";
 import type { Scenario } from "./scenario";
 
 export interface PracticeSessionWithMessages {
-  id: number;
-  scenarioId: number;
-  conversationId: number;
+  id: string;
+  scenarioId: string;
+  conversationId: string;
   scenarioName: string;
   durationSeconds: number | null;
   feedback: string | null;

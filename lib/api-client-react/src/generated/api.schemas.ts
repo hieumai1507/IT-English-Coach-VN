@@ -10,17 +10,21 @@ export interface HealthStatus {
 }
 
 export interface OpenaiConversation {
-  id: number;
+  id: string;
   title: string;
   createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
 }
 
 export interface OpenaiMessage {
-  id: number;
-  conversationId: number;
+  id: string;
+  conversationId: string;
   role: string;
   content: string;
   createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
 }
 
 export interface CreateOpenaiConversationBody {
@@ -37,7 +41,7 @@ export interface SendOpenaiVoiceMessageBody {
 }
 
 export interface OpenaiConversationWithMessages {
-  id: number;
+  id: string;
   title: string;
   createdAt: string;
   messages: OpenaiMessage[];
@@ -48,30 +52,35 @@ export interface OpenaiError {
 }
 
 export interface Scenario {
-  id: number;
+  id: string;
   name: string;
   description: string;
   category: string;
   difficulty: string;
   systemPrompt: string;
   icon: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
 }
 
 export interface PracticeSession {
-  id: number;
-  scenarioId: number;
-  conversationId: number;
+  id: string;
+  scenarioId: string;
+  conversationId: string;
   scenarioName: string;
   durationSeconds: number | null;
   feedback: string | null;
   score: number | null;
   createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
 }
 
 export interface PracticeSessionWithMessages {
-  id: number;
-  scenarioId: number;
-  conversationId: number;
+  id: string;
+  scenarioId: string;
+  conversationId: string;
   scenarioName: string;
   durationSeconds: number | null;
   feedback: string | null;
@@ -82,7 +91,7 @@ export interface PracticeSessionWithMessages {
 }
 
 export interface CreateSessionBody {
-  scenarioId: number;
+  scenarioId: string;
 }
 
 export interface SessionFeedback {
