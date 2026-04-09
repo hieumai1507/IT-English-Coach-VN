@@ -6,9 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, Star, Clock, MessageCircle } from "lucide-react";
-import { formatDistanceToNow, format } from "date-fns";
+import { format } from "date-fns";
+import { useLang } from "@/contexts/language";
 
 export default function SessionDetail() {
+  const { t } = useLang();
   const { id } = useParams<{ id: string }>();
   const sessionId = parseInt(id ?? "0");
 
@@ -33,9 +35,9 @@ export default function SessionDetail() {
   if (!session) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8">
-        <h2 className="text-xl font-semibold">Session not found</h2>
+        <h2 className="text-xl font-semibold">{t.practice.sessionNotFound}</h2>
         <Link href="/history">
-          <Button>Back to History</Button>
+          <Button>{t.session.backToHistory}</Button>
         </Link>
       </div>
     );
@@ -49,7 +51,7 @@ export default function SessionDetail() {
         <Link href="/history">
           <Button variant="ghost" size="sm" className="gap-1 mb-4">
             <ChevronLeft className="h-4 w-4" />
-            Back to History
+            {t.session.backToHistory}
           </Button>
         </Link>
         <h1 className="text-2xl font-bold text-foreground tracking-tight">{session.scenarioName}</h1>
@@ -75,7 +77,7 @@ export default function SessionDetail() {
             <CardTitle className="text-base flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <Star className="h-4 w-4 text-yellow-500" />
-                AI Feedback
+                {t.session.aiFeedback}
               </span>
               <span className="text-2xl font-bold text-primary">
                 {session.score}<span className="text-sm text-muted-foreground font-normal">/100</span>
@@ -93,14 +95,14 @@ export default function SessionDetail() {
       {/* Conversation */}
       <div className="mb-4 flex items-center gap-2">
         <MessageCircle className="h-4 w-4 text-muted-foreground" />
-        <h2 className="font-semibold text-foreground">Conversation Transcript</h2>
-        <span className="text-sm text-muted-foreground">({visibleMessages.length} messages)</span>
+        <h2 className="font-semibold text-foreground">{t.session.transcript}</h2>
+        <span className="text-sm text-muted-foreground">({visibleMessages.length} {t.session.messages})</span>
       </div>
 
       {visibleMessages.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center text-muted-foreground text-sm">
-            No messages recorded for this session.
+            {t.session.noMessages}
           </CardContent>
         </Card>
       ) : (
@@ -115,7 +117,7 @@ export default function SessionDetail() {
                   ? "bg-primary text-primary-foreground"
                   : "bg-secondary text-secondary-foreground"
               }`}>
-                {msg.role === "user" ? "You" : "AI"}
+                {msg.role === "user" ? t.common.you : t.common.ai}
               </div>
               <div className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                 msg.role === "user"
@@ -130,11 +132,14 @@ export default function SessionDetail() {
       )}
 
       <div className="mt-8 flex gap-3">
+        <Link href={`/practice/${session.id}`}>
+          <Button>{t.session.continuePractice}</Button>
+        </Link>
         <Link href="/scenarios">
-          <Button>Practice Again</Button>
+          <Button variant="secondary">{t.session.practiceAgain}</Button>
         </Link>
         <Link href="/history">
-          <Button variant="outline">Back to History</Button>
+          <Button variant="outline">{t.session.backHistory}</Button>
         </Link>
       </div>
     </div>

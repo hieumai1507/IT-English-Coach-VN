@@ -6,21 +6,23 @@ import { Clock, TrendingUp, CheckCircle, Plus, Mic2, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
+import { useLang } from "@/contexts/language";
 
 export default function Home() {
+  const { t } = useLang();
   const { data: stats, isLoading } = useGetPracticeStats({ query: { queryKey: getGetPracticeStatsQueryKey() } });
 
   return (
     <div className="flex-1 overflow-auto p-6 md:p-10 space-y-8 max-w-6xl mx-auto w-full animate-in">
       <header className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome back. Ready to sharpen your professional English?</p>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">{t.home.title}</h1>
+        <p className="text-muted-foreground">{t.home.subtitle}</p>
       </header>
 
       <div className="grid gap-6 md:grid-cols-3 delay-100 animate-in">
         <Card className="bg-card">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Sessions</CardTitle>
+            <CardTitle className="text-sm font-medium">{t.home.totalSessions}</CardTitle>
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -30,17 +32,17 @@ export default function Home() {
         
         <Card className="bg-card">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Practice Time</CardTitle>
+            <CardTitle className="text-sm font-medium">{t.home.practiceTime}</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {isLoading ? <Skeleton className="h-8 w-20" /> : <div className="text-3xl font-bold">{stats?.totalMinutes || 0} <span className="text-lg font-normal text-muted-foreground">min</span></div>}
+            {isLoading ? <Skeleton className="h-8 w-20" /> : <div className="text-3xl font-bold">{stats?.totalMinutes || 0} <span className="text-lg font-normal text-muted-foreground">{t.home.min}</span></div>}
           </CardContent>
         </Card>
 
         <Card className="bg-card">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Avg Score</CardTitle>
+            <CardTitle className="text-sm font-medium">{t.home.avgScore}</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -52,9 +54,9 @@ export default function Home() {
       <div className="grid gap-8 md:grid-cols-2 delay-200 animate-in">
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold tracking-tight">Recent Sessions</h2>
+            <h2 className="text-xl font-semibold tracking-tight">{t.home.recentSessions}</h2>
             <Link href="/history">
-              <Button variant="link" className="text-primary px-0">View all</Button>
+              <Button variant="link" className="text-primary px-0">{t.home.viewAll}</Button>
             </Link>
           </div>
           
@@ -65,9 +67,9 @@ export default function Home() {
               <Card className="bg-secondary/50 border-dashed">
                 <CardContent className="flex flex-col items-center justify-center h-40 text-center space-y-3">
                   <Mic2 className="h-8 w-8 text-muted-foreground opacity-50" />
-                  <p className="text-muted-foreground">No practice sessions yet. Start your first scenario!</p>
+                  <p className="text-muted-foreground">{t.home.noSessions}</p>
                   <Link href="/scenarios">
-                    <Button size="sm">Browse Scenarios</Button>
+                    <Button size="sm">{t.home.browseScenarios}</Button>
                   </Link>
                 </CardContent>
               </Card>
@@ -99,21 +101,21 @@ export default function Home() {
         </div>
 
         <div className="space-y-4 delay-300 animate-in">
-          <h2 className="text-xl font-semibold tracking-tight">Quick Start</h2>
+          <h2 className="text-xl font-semibold tracking-tight">{t.home.quickStart}</h2>
           <Card className="bg-primary/5 border-primary/20">
             <CardHeader>
               <CardTitle className="text-primary flex items-center gap-2">
                 <Plus className="h-5 w-5" />
-                Start a New Session
+                {t.home.startNew}
               </CardTitle>
               <CardDescription>
-                Choose a scenario based on real-world IT situations.
+                {t.home.startDesc}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Link href="/scenarios">
                 <Button className="w-full" size="lg">
-                  Browse Scenarios
+                  {t.home.browseScenarios}
                 </Button>
               </Link>
             </CardContent>

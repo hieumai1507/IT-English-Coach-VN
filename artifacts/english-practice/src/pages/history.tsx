@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Clock, Star, ChevronRight, Mic2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { useLang } from "@/contexts/language";
 
 export default function History() {
+  const { t } = useLang();
   const { data: sessions, isLoading } = useListSessions({
     query: { queryKey: getListSessionsQueryKey() },
   });
@@ -16,8 +18,8 @@ export default function History() {
   return (
     <div className="flex-1 overflow-auto p-6 md:p-10 max-w-4xl mx-auto w-full">
       <header className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Practice History</h1>
-        <p className="text-muted-foreground mt-1">Review your past sessions and track your progress.</p>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">{t.history.title}</h1>
+        <p className="text-muted-foreground mt-1">{t.history.subtitle}</p>
       </header>
 
       {isLoading ? (
@@ -35,19 +37,19 @@ export default function History() {
         <div className="flex flex-col items-center justify-center py-24 gap-6 text-center">
           <Mic2 className="h-12 w-12 text-muted-foreground/40" />
           <div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">No sessions yet</h3>
-            <p className="text-muted-foreground text-sm">Start your first practice session to see your history here.</p>
+            <h3 className="text-lg font-semibold text-foreground mb-2">{t.history.noHistory}</h3>
+            <p className="text-muted-foreground text-sm">{t.history.noHistoryDesc}</p>
           </div>
           <Link href="/scenarios">
-            <Button>Start Practicing</Button>
+            <Button>{t.history.startPracticing}</Button>
           </Link>
         </div>
       ) : (
         <div className="space-y-3">
           {sessions.map((session) => (
-            <Link key={session.id} href={`/session/${session.id}`}>
-              <Card className="hover:border-primary/40 transition-all cursor-pointer group">
-                <CardContent className="p-5 flex items-center justify-between">
+            <Card key={session.id} className="hover:border-primary/40 transition-all">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-1.5">
                       <h3 className="font-semibold text-foreground truncate">{session.scenarioName}</h3>
@@ -75,10 +77,19 @@ export default function History() {
                       </p>
                     )}
                   </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0 ml-4" />
-                </CardContent>
-              </Card>
-            </Link>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </div>
+
+                <div className="mt-4 flex items-center gap-2">
+                  <Link href={`/practice/${session.id}`}>
+                    <Button size="sm">{t.history.continuePractice}</Button>
+                  </Link>
+                  <Link href={`/session/${session.id}`}>
+                    <Button size="sm" variant="outline">{t.history.viewDetails}</Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}

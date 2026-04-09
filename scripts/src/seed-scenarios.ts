@@ -4,7 +4,7 @@
  */
 import "./load-env.ts";
 import { sql } from "drizzle-orm";
-import { db, scenariosTable } from "@workspace/db";
+import { db, scenariosTable, categoriesTable } from "@workspace/db";
 
 const SCENARIOS = [
   {
@@ -82,6 +82,12 @@ const SCENARIOS = [
 ] as const;
 
 async function main() {
+  const categoryNames = Array.from(new Set(SCENARIOS.map((s) => s.category)));
+  await db
+    .insert(categoriesTable)
+    .values(categoryNames.map((name) => ({ name })))
+    .onConflictDoNothing({ target: categoriesTable.name });
+
   const [{ count }] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(scenariosTable);

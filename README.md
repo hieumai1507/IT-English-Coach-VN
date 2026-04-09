@@ -30,7 +30,7 @@ Adjust the following for your environment:
 | `AI_INTEGRATIONS_OPENAI_API_KEY` | **Required** — API key from [OpenAI](https://platform.openai.com/). |
 | `AI_INTEGRATIONS_OPENAI_BASE_URL` | For the official API: `https://api.openai.com/v1`. |
 | `PORT` | API server port (default `3000`). |
-| `PORT` (Vite) | In the same `.env`, the Vite dev server port — e.g. `5173`. |
+| `VITE_PORT` (Vite) | Vite dev server port — e.g. `5173`. |
 | `BASE_PATH` | Usually `/` for local development. |
 | `API_PROXY_TARGET` | API base URL for Vite to proxy `/api` during dev — e.g. `http://127.0.0.1:3000` (must match the API `PORT`). |
 
@@ -76,7 +76,7 @@ set -a && source .env && set +a && pnpm dev:api
 set -a && source .env && set +a && pnpm dev:web
 ```
 
-Open the app at `http://localhost:<Vite_PORT>` (uncomment or set `PORT=5173` in `.env` as in `.env.example`).
+Open the app at `http://localhost:<VITE_PORT>` (set `VITE_PORT=5173` in `.env` as in `.env.example`).
 
 `API_PROXY_TARGET` lets the browser call `/api/...` on the same origin as Vite during development (no manual cross-port CORS setup for those requests).
 

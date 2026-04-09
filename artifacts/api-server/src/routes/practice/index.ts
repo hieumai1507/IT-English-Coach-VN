@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import {
   scenariosTable,
+  categoriesTable,
   practiceSessionsTable,
   conversations,
   messages,
@@ -15,10 +16,109 @@ import {
 import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router = Router();
+type CreateScenarioBody = {
+  name: string;
+  description: string;
+  category: string;
+  difficulty: "beginner" | "intermediate" | "advanced";
+  icon: string;
+  systemPrompt: string;
+};
+
+const BASE_COACH_SYSTEM_PROMPT = `You are an English speaking coach for Vietnamese IT professionals.
+Keep role-play realistic and supportive.
+
+Core behavior for every user turn:
+1) Continue the scenario naturally (as a colleague/client/interviewer).
+2) Briefly correct major mistakes:
+   - Pronunciation/spoken-form issues (based on transcript clues)
+   - Grammar
+   - Word choice and professional tone
+3) Provide:
+   - one smoother version of the user's sentence
+   - one additional useful sentence for this exact situation
+4) Keep corrections concise: 1-3 short bullets max, then continue conversation.
+5) Adapt difficulty progressively:
+   - beginner: shorter sentences, slower pace
+   - intermediate: normal workplace pace, moderate vocabulary
+   - advanced: nuanced negotiation/discussion language
+
+Do not be harsh. Prioritize clarity, confidence, and practical workplace English.`;
 
 router.get("/practice/scenarios", async (_req, res) => {
   const scenarios = await db.select().from(scenariosTable).orderBy(scenariosTable.id);
   res.json(scenarios);
+});
+
+router.get("/practice/categories", async (_req, res) => {
+  const categories = await db.select().from(categoriesTable).orderBy(categoriesTable.name);
+  res.json(categories);
+});
+
+router.post("/practice/categories", async (req, res) => {
+  const raw = req.body as { name?: string };
+  const name = String(raw.name ?? "").trim();
+
+  if (name.length < 2) {
+    res.status(400).json({ error: "Invalid category name" });
+    return;
+  }
+
+  const [created] = await db
+    .insert(categoriesTable)
+    .values({ name })
+    .onConflictDoNothing({ target: categoriesTable.name })
+    .returning();
+
+  if (created) {
+    res.status(201).json(created);
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(categoriesTable)
+    .where(eq(categoriesTable.name, name));
+
+  if (!existing) {
+    res.status(500).json({ error: "Category lookup failed after conflict" });
+    return;
+  }
+
+  res.status(200).json(existing);
+});
+
+router.post("/practice/scenarios", async (req, res) => {
+  const raw = req.body as Partial<CreateScenarioBody>;
+  const body: CreateScenarioBody = {
+    name: String(raw.name ?? "").trim(),
+    description: String(raw.description ?? "").trim(),
+    category: String(raw.category ?? "").trim(),
+    difficulty:
+      raw.difficulty === "beginner" || raw.difficulty === "advanced"
+        ? raw.difficulty
+        : "intermediate",
+    icon: String(raw.icon ?? "default").trim() || "default",
+    systemPrompt: String(raw.systemPrompt ?? "").trim(),
+  };
+
+  if (
+    body.name.length < 3 ||
+    body.description.length < 10 ||
+    body.category.length < 2 ||
+    body.systemPrompt.length < 30
+  ) {
+    res.status(400).json({ error: "Invalid scenario payload" });
+    return;
+  }
+
+  await db
+    .insert(categoriesTable)
+    .values({ name: body.category })
+    .onConflictDoNothing({ target: categoriesTable.name });
+
+  const [created] = await db.insert(scenariosTable).values(body).returning();
+  res.status(201).json(created);
 });
 
 router.get("/practice/sessions", async (_req, res) => {
@@ -60,7 +160,13 @@ router.post("/practice/sessions", async (req, res) => {
   await db.insert(messages).values({
     conversationId: conv.id,
     role: "system",
-    content: scenario.systemPrompt,
+    content: `${BASE_COACH_SYSTEM_PROMPT}
+
+Scenario title: ${scenario.name}
+Scenario category: ${scenario.category}
+Scenario difficulty: ${scenario.difficulty}
+Scenario details:
+${scenario.systemPrompt}`,
   });
 
   const [session] = await db
@@ -166,9 +272,19 @@ CONVERSATION:
 ${conversationText}
 
 Provide a JSON response with:
-1. "feedback": 2-3 paragraphs of specific, encouraging feedback on grammar, vocabulary, fluency, and professional communication
-2. "score": an integer from 0-100 based on grammar accuracy, vocabulary range, fluency, and professional tone
-3. "suggestions": array of 3-5 specific actionable improvement tips
+1. "feedback": 2 concise paragraphs summarizing strengths and top priorities
+2. "score": integer 0-100 based on grammar, fluency, clarity, and professional communication
+3. "suggestions": array of 4-6 actionable tips
+
+Also evaluate learning progression and include these sections in the "feedback" text:
+- "Progression today": what improved during the session
+- "Next-step focus": what to train in the next session
+- At least 2 concrete corrections with this format:
+  Original: "..."
+  Better: "..."
+  Why: ...
+- At least 1 alternative polished sentence for workplace use
+- At least 1 extra sentence the learner could use in the same situation
 
 Respond ONLY with valid JSON, no markdown.`;
 
