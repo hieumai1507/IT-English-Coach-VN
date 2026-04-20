@@ -17,10 +17,11 @@ import {
 } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import {
-  voiceChatStream,
+  voicePipelineStream,
   ensureCompatibleFormat,
   type PriorMessage,
 } from "@workspace/integrations-openai-ai-server/audio";
+import { voiceContextStore, type ContextMessage } from "../../lib/voice-contexts";
 
 const router = Router();
 
@@ -142,23 +143,32 @@ router.post("/openai/conversations/:id/voice-messages", async (req, res) => {
     return;
   }
 
-  // Fetch conversation history so the AI coach has full context.
-  // Cap at system prompt + last 10 turns (20 messages) to keep token
-  // costs bounded for long sessions without losing meaningful context.
-  const MAX_HISTORY_TURNS = 10;
-  const allMsgs = await messageRepo.findAll();
-  const convMsgs = allMsgs.filter((m: Message) => m.conversationId === id);
-  const systemMsg = convMsgs.find((m: Message) => m.role === "system");
-  const nonSystemMsgs = convMsgs.filter((m: Message) => m.role !== "system");
-  const recentMsgs = nonSystemMsgs.slice(-(MAX_HISTORY_TURNS * 2));
-  const priorMessages: PriorMessage[] = [
-    ...(systemMsg ? [{ role: "system" as const, content: String(systemMsg.content) }] : []),
-    ...recentMsgs.map((m: Message) => ({
-      role: m.role as PriorMessage["role"],
-      content: m.content,
-    })),
-  ];
+  // ── Resolve context (in-memory first, DB fallback) ──────────────────────────
+  // If context is in the store (normal case), use it directly — no DB query.
+  // On server restart the store is empty, so we fall back to loading from DB.
+  let context: ContextMessage[];
+  const cached = voiceContextStore.get(id);
+  if (cached) {
+    context = cached;
+  } else {
+    // Fallback: load from DB, cap at system + last 10 turns
+    const MAX_TURNS = 10;
+    const allMsgs = await messageRepo.findAll();
+    const convMsgs = allMsgs.filter((m: Message) => m.conversationId === id);
+    const systemMsg = convMsgs.find((m: Message) => m.role === "system");
+    const nonSystem = convMsgs.filter((m: Message) => m.role !== "system");
+    context = [
+      ...(systemMsg ? [{ role: "system" as const, content: String(systemMsg.content) }] : []),
+      ...nonSystem.slice(-(MAX_TURNS * 2)).map((m: Message) => ({
+        role: m.role as ContextMessage["role"],
+        content: m.content,
+      })),
+    ];
+    // Warm up the store so subsequent turns don't hit the DB
+    voiceContextStore.init(id, context);
+  }
 
+  // ── Start SSE stream ─────────────────────────────────────────────────────────
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
@@ -168,36 +178,42 @@ router.post("/openai/conversations/:id/voice-messages", async (req, res) => {
   const controller = new AbortController();
   res.on("close", () => controller.abort());
 
-  const stream = await voiceChatStream(buffer, "alloy", format, {
+  // Run new STT → LLM → TTS pipeline
+  const pipelineStream = await voicePipelineStream(buffer, format, context as PriorMessage[], {
     signal: controller.signal,
-    priorMessages,
   });
 
-  let assistantTranscript = "";
   let userTranscript = "";
+  let assistantTranscript = "";
 
-  for await (const event of stream) {
-    if (event.type === "transcript") {
+  for await (const event of pipelineStream) {
+    if (event.type === "user_transcript") {
+      userTranscript = event.data;
+    } else if (event.type === "transcript") {
       assistantTranscript += event.data;
-    } else if (event.type === "user_transcript") {
-      userTranscript += event.data;
     }
     res.write(`data: ${JSON.stringify(event)}\n\n`);
   }
 
-  if (userTranscript) {
-    await messageRepo.create({
-      conversationId: id,
-      role: "user",
-      content: userTranscript,
-    });
-  }
-  if (assistantTranscript) {
-    await messageRepo.create({
-      conversationId: id,
-      role: "assistant",
-      content: assistantTranscript,
-    });
+  // ── Persist transcripts + update in-memory context ───────────────────────────
+  // Run DB writes asynchronously — don't block the SSE stream closing.
+  if (userTranscript || assistantTranscript) {
+    const userMsg: ContextMessage = { role: "user", content: userTranscript };
+    const assistantMsg: ContextMessage = { role: "assistant", content: assistantTranscript };
+
+    // Update in-memory context immediately
+    if (userTranscript) voiceContextStore.append(id, userMsg);
+    if (assistantTranscript) voiceContextStore.append(id, assistantMsg);
+
+    // Persist to DB asynchronously (fire-and-forget)
+    Promise.all([
+      userTranscript
+        ? messageRepo.create({ conversationId: id, role: "user", content: userTranscript })
+        : null,
+      assistantTranscript
+        ? messageRepo.create({ conversationId: id, role: "assistant", content: assistantTranscript })
+        : null,
+    ]).catch((err) => console.error("[voice] DB persist error:", err));
   }
 
   res.write(`data: ${JSON.stringify({ done: true })}\n\n`);

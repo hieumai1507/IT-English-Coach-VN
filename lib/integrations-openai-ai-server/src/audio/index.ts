@@ -12,3 +12,6 @@ export {
   speechToText,
   speechToTextStream,
 } from "./client";
+
+export { voicePipelineStream, type VoicePipelineEvent } from "./pipeline";
+

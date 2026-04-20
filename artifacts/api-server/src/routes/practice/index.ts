@@ -19,6 +19,7 @@ import {
   GenerateFeedbackParams,
 } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { voiceContextStore } from "../../lib/voice-contexts";
 
 const router = Router();
 type CreateScenarioBody = {
@@ -140,6 +141,15 @@ router.post("/practice/sessions", async (req, res) => {
   const sessionData = await db.transaction(async (tx) => {
     // We still use transactions for complex atomic ops, 
     // but the logic remains centered around our entity structure
+    // Build the full system message that will be used for every voice turn
+    const systemContent = `${BASE_COACH_SYSTEM_PROMPT}
+
+Scenario title: ${scenario.name}
+Scenario category: ${scenario.category}
+Scenario difficulty: ${scenario.difficulty}
+Scenario details:
+${scenario.systemPrompt}`;
+
     const [conv] = await tx
       .insert(conversationRepo["table"])
       .values({ title: `${scenario.name} - Practice Session` })
@@ -148,13 +158,7 @@ router.post("/practice/sessions", async (req, res) => {
     await tx.insert(messageRepo["table"]).values({
       conversationId: conv.id,
       role: "system",
-      content: `${BASE_COACH_SYSTEM_PROMPT}
-
-Scenario title: ${scenario.name}
-Scenario category: ${scenario.category}
-Scenario difficulty: ${scenario.difficulty}
-Scenario details:
-${scenario.systemPrompt}`,
+      content: systemContent,
     });
 
     const [session] = await tx
@@ -164,6 +168,12 @@ ${scenario.systemPrompt}`,
         conversationId: conv.id,
       })
       .returning();
+
+    // Init the in-memory voice context so the first voice turn
+    // never needs to query the DB for history.
+    voiceContextStore.init(conv.id, [
+      { role: "system", content: systemContent },
+    ]);
 
     return session;
   });
