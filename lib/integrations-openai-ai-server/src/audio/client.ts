@@ -137,12 +137,17 @@ export async function voiceChat(
   };
 }
 
+export type PriorMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
+
 /** Streaming Voice Chat for real-time audio responses. */
 export async function voiceChatStream(
   audioBuffer: Buffer,
   voice: "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer" = "alloy",
   inputFormat: "wav" | "mp3" = "wav",
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal; priorMessages?: PriorMessage[] }
 ): Promise<
   AsyncIterable<
     | { type: "transcript"; data: string }
@@ -151,18 +156,24 @@ export async function voiceChatStream(
   >
 > {
   const audioBase64 = audioBuffer.toString("base64");
+  const priorMessages = options?.priorMessages ?? [];
   const stream = await openai.chat.completions.create({
     model: "gpt-4o-audio-preview",
     modalities: ["text", "audio"],
     audio: { voice, format: "pcm16" },
-    messages: [{
-      role: "user",
-      content: [
-        { type: "input_audio", input_audio: { data: audioBase64, format: inputFormat } },
-      ],
-    }],
+    messages: [
+      // Prepend full conversation history (system prompt + prior turns)
+      ...priorMessages.map((m) => ({ role: m.role, content: m.content })),
+      // Current audio turn
+      {
+        role: "user" as const,
+        content: [
+          { type: "input_audio" as const, input_audio: { data: audioBase64, format: inputFormat } },
+        ],
+      },
+    ],
     stream: true,
-  }, options);
+  }, { signal: options?.signal });
 
   return (async function* () {
     for await (const chunk of stream) {

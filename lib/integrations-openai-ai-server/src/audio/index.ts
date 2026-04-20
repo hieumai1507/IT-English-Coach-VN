@@ -6,6 +6,7 @@ export {
   type AudioFormat,
   voiceChat,
   voiceChatStream,
+  type PriorMessage,
   textToSpeech,
   textToSpeechStream,
   speechToText,

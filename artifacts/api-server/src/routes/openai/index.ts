@@ -19,6 +19,7 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 import {
   voiceChatStream,
   ensureCompatibleFormat,
+  type PriorMessage,
 } from "@workspace/integrations-openai-ai-server/audio";
 
 const router = Router();
@@ -141,16 +142,36 @@ router.post("/openai/conversations/:id/voice-messages", async (req, res) => {
     return;
   }
 
+  // Fetch conversation history so the AI coach has full context.
+  // Cap at system prompt + last 10 turns (20 messages) to keep token
+  // costs bounded for long sessions without losing meaningful context.
+  const MAX_HISTORY_TURNS = 10;
+  const allMsgs = await messageRepo.findAll();
+  const convMsgs = allMsgs.filter((m: Message) => m.conversationId === id);
+  const systemMsg = convMsgs.find((m: Message) => m.role === "system");
+  const nonSystemMsgs = convMsgs.filter((m: Message) => m.role !== "system");
+  const recentMsgs = nonSystemMsgs.slice(-(MAX_HISTORY_TURNS * 2));
+  const priorMessages: PriorMessage[] = [
+    ...(systemMsg ? [{ role: "system" as const, content: String(systemMsg.content) }] : []),
+    ...recentMsgs.map((m: Message) => ({
+      role: m.role as PriorMessage["role"],
+      content: m.content,
+    })),
+  ];
+
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
 
   const { buffer, format } = await ensureCompatibleFormat(audioBuffer);
-  
+
   const controller = new AbortController();
   res.on("close", () => controller.abort());
 
-  const stream = await voiceChatStream(buffer, "alloy", format, { signal: controller.signal });
+  const stream = await voiceChatStream(buffer, "alloy", format, {
+    signal: controller.signal,
+    priorMessages,
+  });
 
   let assistantTranscript = "";
   let userTranscript = "";

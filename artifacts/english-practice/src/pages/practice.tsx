@@ -74,7 +74,7 @@ export default function Practice() {
   const generateFeedback = useGenerateFeedback();
 
   const workletPath = import.meta.env.BASE_URL + "audio-playback-worklet.js";
-  const voiceStream = useVoiceStream({
+  const { streamVoiceResponse, stop: stopVoiceStream } = useVoiceStream({
     workletPath,
     onTranscript: (_partial, full) => {
       setAiTyping(false);
@@ -107,6 +107,15 @@ export default function Practice() {
 
   const handleStartRecording = async () => {
     setMicError(null);
+
+    // Barge-in: if AI is currently speaking, interrupt it immediately
+    if (voiceStreaming) {
+      stopVoiceStream();
+      setVoiceStreaming(false);
+      setAiTyping(false);
+      setStreamTranscript("");
+    }
+
     try {
       await recorder.startRecording();
       if (!started) {
@@ -142,7 +151,7 @@ export default function Practice() {
     setVoiceStreaming(true);
 
     try {
-      await voiceStream.streamVoiceResponse(
+      await streamVoiceResponse(
         `/api/openai/conversations/${convId}/voice-messages`,
         blob
       );
@@ -358,26 +367,29 @@ export default function Practice() {
               </a>
             </div>
           )}
-          <button
+        <button
             onMouseDown={handleStartRecording}
             onMouseUp={handleStopRecording}
             onTouchStart={handleStartRecording}
             onTouchEnd={handleStopRecording}
-            disabled={voiceStreaming || aiTyping}
+            disabled={aiTyping}
             className={`
               w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 shadow-lg
               ${recorder.state === "recording"
                 ? "bg-red-500 text-white scale-110 shadow-red-500/40 shadow-xl"
-                : voiceStreaming || aiTyping
+                : aiTyping
                 ? "bg-muted text-muted-foreground cursor-not-allowed"
+                : voiceStreaming
+                ? "bg-amber-500 text-white hover:scale-105 hover:shadow-amber-500/40 hover:shadow-xl active:scale-95"
                 : "bg-primary text-primary-foreground hover:scale-105 hover:shadow-primary/30 hover:shadow-xl active:scale-95"
               }
               ${recorder.state === "recording" ? "animate-pulse" : ""}
+              ${voiceStreaming && recorder.state !== "recording" ? "animate-pulse" : ""}
             `}
           >
             {recorder.state === "recording" ? (
               <MicOff className="h-8 w-8" />
-            ) : voiceStreaming || aiTyping ? (
+            ) : aiTyping ? (
               <Loader2 className="h-8 w-8 animate-spin" />
             ) : (
               <Mic className="h-8 w-8" />
@@ -386,8 +398,10 @@ export default function Practice() {
           <p className="text-xs text-muted-foreground">
             {recorder.state === "recording"
               ? "Release to send your message"
-              : voiceStreaming || aiTyping
-              ? "AI is responding..."
+              : aiTyping
+              ? "AI is processing..."
+              : voiceStreaming
+              ? "Hold to interrupt AI"
               : "Hold to speak"}
           </p>
         </div>
