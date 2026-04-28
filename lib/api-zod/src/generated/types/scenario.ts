@@ -7,11 +7,14 @@
  */
 
 export interface Scenario {
-  id: number;
+  id: string;
   name: string;
   description: string;
   category: string;
   difficulty: string;
   systemPrompt: string;
   icon: string;
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt?: Date | null;
 }

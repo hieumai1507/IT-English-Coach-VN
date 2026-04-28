@@ -284,12 +284,12 @@ export const useCreateOpenaiConversation = <
 /**
  * @summary Get conversation with messages
  */
-export const getGetOpenaiConversationUrl = (id: number) => {
+export const getGetOpenaiConversationUrl = (id: string) => {
   return `/api/openai/conversations/${id}`;
 };
 
 export const getOpenaiConversation = async (
-  id: number,
+  id: string,
   options?: RequestInit,
 ): Promise<OpenaiConversationWithMessages> => {
   return customFetch<OpenaiConversationWithMessages>(
@@ -301,7 +301,7 @@ export const getOpenaiConversation = async (
   );
 };
 
-export const getGetOpenaiConversationQueryKey = (id: number) => {
+export const getGetOpenaiConversationQueryKey = (id: string) => {
   return [`/api/openai/conversations/${id}`] as const;
 };
 
@@ -309,7 +309,7 @@ export const getGetOpenaiConversationQueryOptions = <
   TData = Awaited<ReturnType<typeof getOpenaiConversation>>,
   TError = ErrorType<OpenaiError>,
 >(
-  id: number,
+  id: string,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getOpenaiConversation>>,
@@ -353,7 +353,7 @@ export function useGetOpenaiConversation<
   TData = Awaited<ReturnType<typeof getOpenaiConversation>>,
   TError = ErrorType<OpenaiError>,
 >(
-  id: number,
+  id: string,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getOpenaiConversation>>,
@@ -375,12 +375,12 @@ export function useGetOpenaiConversation<
 /**
  * @summary Delete a conversation
  */
-export const getDeleteOpenaiConversationUrl = (id: number) => {
+export const getDeleteOpenaiConversationUrl = (id: string) => {
   return `/api/openai/conversations/${id}`;
 };
 
 export const deleteOpenaiConversation = async (
-  id: number,
+  id: string,
   options?: RequestInit,
 ): Promise<void> => {
   return customFetch<void>(getDeleteOpenaiConversationUrl(id), {
@@ -396,14 +396,14 @@ export const getDeleteOpenaiConversationMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof deleteOpenaiConversation>>,
     TError,
-    { id: number },
+    { id: string },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof deleteOpenaiConversation>>,
   TError,
-  { id: number },
+  { id: string },
   TContext
 > => {
   const mutationKey = ["deleteOpenaiConversation"];
@@ -417,7 +417,7 @@ export const getDeleteOpenaiConversationMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof deleteOpenaiConversation>>,
-    { id: number }
+    { id: string }
   > = (props) => {
     const { id } = props ?? {};
 
@@ -443,14 +443,14 @@ export const useDeleteOpenaiConversation = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof deleteOpenaiConversation>>,
     TError,
-    { id: number },
+    { id: string },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof deleteOpenaiConversation>>,
   TError,
-  { id: number },
+  { id: string },
   TContext
 > => {
   return useMutation(getDeleteOpenaiConversationMutationOptions(options));
@@ -459,12 +459,12 @@ export const useDeleteOpenaiConversation = <
 /**
  * @summary List messages in a conversation
  */
-export const getListOpenaiMessagesUrl = (id: number) => {
+export const getListOpenaiMessagesUrl = (id: string) => {
   return `/api/openai/conversations/${id}/messages`;
 };
 
 export const listOpenaiMessages = async (
-  id: number,
+  id: string,
   options?: RequestInit,
 ): Promise<OpenaiMessage[]> => {
   return customFetch<OpenaiMessage[]>(getListOpenaiMessagesUrl(id), {
@@ -473,7 +473,7 @@ export const listOpenaiMessages = async (
   });
 };
 
-export const getListOpenaiMessagesQueryKey = (id: number) => {
+export const getListOpenaiMessagesQueryKey = (id: string) => {
   return [`/api/openai/conversations/${id}/messages`] as const;
 };
 
@@ -481,7 +481,7 @@ export const getListOpenaiMessagesQueryOptions = <
   TData = Awaited<ReturnType<typeof listOpenaiMessages>>,
   TError = ErrorType<unknown>,
 >(
-  id: number,
+  id: string,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof listOpenaiMessages>>,
@@ -524,7 +524,7 @@ export function useListOpenaiMessages<
   TData = Awaited<ReturnType<typeof listOpenaiMessages>>,
   TError = ErrorType<unknown>,
 >(
-  id: number,
+  id: string,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof listOpenaiMessages>>,
@@ -546,12 +546,12 @@ export function useListOpenaiMessages<
 /**
  * @summary Send a text message and receive a streaming text response
  */
-export const getSendOpenaiMessageUrl = (id: number) => {
+export const getSendOpenaiMessageUrl = (id: string) => {
   return `/api/openai/conversations/${id}/messages`;
 };
 
 export const sendOpenaiMessage = async (
-  id: number,
+  id: string,
   sendOpenaiMessageBody: SendOpenaiMessageBody,
   options?: RequestInit,
 ): Promise<unknown> => {
@@ -570,14 +570,14 @@ export const getSendOpenaiMessageMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof sendOpenaiMessage>>,
     TError,
-    { id: number; data: BodyType<SendOpenaiMessageBody> },
+    { id: string; data: BodyType<SendOpenaiMessageBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof sendOpenaiMessage>>,
   TError,
-  { id: number; data: BodyType<SendOpenaiMessageBody> },
+  { id: string; data: BodyType<SendOpenaiMessageBody> },
   TContext
 > => {
   const mutationKey = ["sendOpenaiMessage"];
@@ -591,7 +591,7 @@ export const getSendOpenaiMessageMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof sendOpenaiMessage>>,
-    { id: number; data: BodyType<SendOpenaiMessageBody> }
+    { id: string; data: BodyType<SendOpenaiMessageBody> }
   > = (props) => {
     const { id, data } = props ?? {};
 
@@ -617,14 +617,14 @@ export const useSendOpenaiMessage = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof sendOpenaiMessage>>,
     TError,
-    { id: number; data: BodyType<SendOpenaiMessageBody> },
+    { id: string; data: BodyType<SendOpenaiMessageBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof sendOpenaiMessage>>,
   TError,
-  { id: number; data: BodyType<SendOpenaiMessageBody> },
+  { id: string; data: BodyType<SendOpenaiMessageBody> },
   TContext
 > => {
   return useMutation(getSendOpenaiMessageMutationOptions(options));
@@ -633,12 +633,12 @@ export const useSendOpenaiMessage = <
 /**
  * @summary Send audio and receive a streaming voice response
  */
-export const getSendOpenaiVoiceMessageUrl = (id: number) => {
+export const getSendOpenaiVoiceMessageUrl = (id: string) => {
   return `/api/openai/conversations/${id}/voice-messages`;
 };
 
 export const sendOpenaiVoiceMessage = async (
-  id: number,
+  id: string,
   sendOpenaiVoiceMessageBody: SendOpenaiVoiceMessageBody,
   options?: RequestInit,
 ): Promise<unknown> => {
@@ -657,14 +657,14 @@ export const getSendOpenaiVoiceMessageMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof sendOpenaiVoiceMessage>>,
     TError,
-    { id: number; data: BodyType<SendOpenaiVoiceMessageBody> },
+    { id: string; data: BodyType<SendOpenaiVoiceMessageBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof sendOpenaiVoiceMessage>>,
   TError,
-  { id: number; data: BodyType<SendOpenaiVoiceMessageBody> },
+  { id: string; data: BodyType<SendOpenaiVoiceMessageBody> },
   TContext
 > => {
   const mutationKey = ["sendOpenaiVoiceMessage"];
@@ -678,7 +678,7 @@ export const getSendOpenaiVoiceMessageMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof sendOpenaiVoiceMessage>>,
-    { id: number; data: BodyType<SendOpenaiVoiceMessageBody> }
+    { id: string; data: BodyType<SendOpenaiVoiceMessageBody> }
   > = (props) => {
     const { id, data } = props ?? {};
 
@@ -705,14 +705,14 @@ export const useSendOpenaiVoiceMessage = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof sendOpenaiVoiceMessage>>,
     TError,
-    { id: number; data: BodyType<SendOpenaiVoiceMessageBody> },
+    { id: string; data: BodyType<SendOpenaiVoiceMessageBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof sendOpenaiVoiceMessage>>,
   TError,
-  { id: number; data: BodyType<SendOpenaiVoiceMessageBody> },
+  { id: string; data: BodyType<SendOpenaiVoiceMessageBody> },
   TContext
 > => {
   return useMutation(getSendOpenaiVoiceMessageMutationOptions(options));
@@ -957,12 +957,12 @@ export const useCreateSession = <
 /**
  * @summary Get a session with messages
  */
-export const getGetSessionUrl = (id: number) => {
+export const getGetSessionUrl = (id: string) => {
   return `/api/practice/sessions/${id}`;
 };
 
 export const getSession = async (
-  id: number,
+  id: string,
   options?: RequestInit,
 ): Promise<PracticeSessionWithMessages> => {
   return customFetch<PracticeSessionWithMessages>(getGetSessionUrl(id), {
@@ -971,7 +971,7 @@ export const getSession = async (
   });
 };
 
-export const getGetSessionQueryKey = (id: number) => {
+export const getGetSessionQueryKey = (id: string) => {
   return [`/api/practice/sessions/${id}`] as const;
 };
 
@@ -979,7 +979,7 @@ export const getGetSessionQueryOptions = <
   TData = Awaited<ReturnType<typeof getSession>>,
   TError = ErrorType<OpenaiError>,
 >(
-  id: number,
+  id: string,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getSession>>,
@@ -1022,7 +1022,7 @@ export function useGetSession<
   TData = Awaited<ReturnType<typeof getSession>>,
   TError = ErrorType<OpenaiError>,
 >(
-  id: number,
+  id: string,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof getSession>>,
@@ -1044,12 +1044,12 @@ export function useGetSession<
 /**
  * @summary Generate AI feedback for a practice session
  */
-export const getGenerateFeedbackUrl = (id: number) => {
+export const getGenerateFeedbackUrl = (id: string) => {
   return `/api/practice/sessions/${id}/feedback`;
 };
 
 export const generateFeedback = async (
-  id: number,
+  id: string,
   options?: RequestInit,
 ): Promise<SessionFeedback> => {
   return customFetch<SessionFeedback>(getGenerateFeedbackUrl(id), {
@@ -1065,14 +1065,14 @@ export const getGenerateFeedbackMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof generateFeedback>>,
     TError,
-    { id: number },
+    { id: string },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof generateFeedback>>,
   TError,
-  { id: number },
+  { id: string },
   TContext
 > => {
   const mutationKey = ["generateFeedback"];
@@ -1086,7 +1086,7 @@ export const getGenerateFeedbackMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof generateFeedback>>,
-    { id: number }
+    { id: string }
   > = (props) => {
     const { id } = props ?? {};
 
@@ -1112,14 +1112,14 @@ export const useGenerateFeedback = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof generateFeedback>>,
     TError,
-    { id: number },
+    { id: string },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof generateFeedback>>,
   TError,
-  { id: number },
+  { id: string },
   TContext
 > => {
   return useMutation(getGenerateFeedbackMutationOptions(options));

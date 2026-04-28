@@ -248,6 +248,12 @@ export function useVoiceStream({ workletPath, ...callbacks }: StreamCallbacks) {
     };
   }, []);
 
+  const stop = useCallback(() => {
+    activeRequestRef.current?.abort();
+    activeRequestRef.current = null;
+    playbackRef.current.clear();
+  }, []);
+
   const streamVoiceResponse = useCallback(
     async (url: string, audioBlob: Blob): Promise<void> => {
       activeRequestRef.current?.abort();
@@ -388,5 +394,5 @@ export function useVoiceStream({ workletPath, ...callbacks }: StreamCallbacks) {
     []
   );
 
-  return { streamVoiceResponse, playbackState: playback.state };
+  return { streamVoiceResponse, stop, playbackState: playback.state };
 }

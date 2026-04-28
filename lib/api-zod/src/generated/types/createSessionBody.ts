@@ -7,5 +7,5 @@
  */
 
 export interface CreateSessionBody {
-  scenarioId: number;
+  scenarioId: string;
 }

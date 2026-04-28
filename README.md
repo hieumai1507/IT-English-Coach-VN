@@ -10,7 +10,7 @@ This guide explains how to run the monorepo on your machine (outside Replit). Af
 
 ## 1. Install dependencies
 
-From the `English-Practice-Bot` directory:
+From the repo root:
 
 ```bash
 pnpm install
@@ -34,7 +34,7 @@ Adjust the following for your environment:
 | `BASE_PATH` | Usually `/` for local development. |
 | `API_PROXY_TARGET` | API base URL for Vite to proxy `/api` during dev — e.g. `http://127.0.0.1:3000` (must match the API `PORT`). |
 
-Place `.env` at the **root** of `English-Practice-Bot/`. Vite is configured with `envDir` so it loads this file.
+Place `.env` at the **root** of the repository. Vite is configured with `envDir` so it loads this file.
 
 ## 3. PostgreSQL
 
@@ -59,21 +59,23 @@ pnpm db:push
 pnpm db:seed
 ```
 
-- `db:push`: applies the Drizzle schema to the database.
-- `db:seed`: inserts the eight practice scenarios (runs only when the `scenarios` table is empty).
+- `db:push`: applies the Drizzle schema to the database. All tables include lifecycle columns (`id`, `createdAt`, `updatedAt`, `deletedAt`) managed automatically.
+- `db:seed`: truncates and re-inserts the eight built-in practice scenarios with auto-generated **16-character NanoIDs**.
+
+> **Note on soft deletes:** Records deleted via the UI are marked with a `deletedAt` timestamp and filtered out from all queries automatically. They are not physically removed.
 
 ## 5. Run the app (two terminals)
 
 **Terminal 1 — API:**
 
 ```bash
-set -a && source .env && set +a && pnpm dev:api
+pnpm dev:api
 ```
 
 **Terminal 2 — web UI:**
 
 ```bash
-set -a && source .env && set +a && pnpm dev:web
+pnpm dev:web
 ```
 
 Open the app at `http://localhost:<VITE_PORT>` (set `VITE_PORT=5173` in `.env` as in `.env.example`).
@@ -82,24 +84,34 @@ Open the app at `http://localhost:<VITE_PORT>` (set `VITE_PORT=5173` in `.env` a
 
 ## 6. Quick checks
 
-- API: look for a “Server listening” log and try `GET /api/healthz` (or the health route defined in the project’s OpenAPI spec).
+- API: look for a "Server listening" log and try `GET /api/healthz`.
 - Voice/chat errors: verify the key, quota, and models; the app uses OpenAI via the `AI_INTEGRATIONS_*` variables.
 
 ## Useful commands (root `package.json`)
 
 | Command | Description |
 |---------|-------------|
-| `pnpm run typecheck` | Typecheck the whole workspace |
-| `pnpm db:push` | Push Drizzle schema |
-| `pnpm db:seed` | Seed scenarios |
-| `pnpm dev:api` | Run the API server in dev |
-| `pnpm dev:web` | Run the Vite frontend in dev |
+| `pnpm run typecheck` | Typecheck the whole monorepo |
+| `pnpm db:push` | Push Drizzle schema to database |
+| `pnpm db:seed` | Truncate & re-seed practice scenarios |
+| `pnpm dev:api` | Run the API server in dev mode |
+| `pnpm dev:web` | Run the Vite frontend in dev mode |
 
 For package layout and stack details, see `replit.md`.
 
+## Architecture overview
+
+| Layer | Package | Description |
+|-------|---------|-------------|
+| Database | `@workspace/db` | Drizzle ORM + PostgreSQL. Exports a `BaseRepository` abstraction with soft-delete, `findAll`, `findOneById`, `create`, `update` and `softDelete` methods. All entity IDs use 16-character alphanumeric NanoIDs. |
+| API validation | `@workspace/api-zod` | Auto-generated Zod schemas from the OpenAPI spec in `lib/api-spec`. Re-run codegen with `pnpm --filter @workspace/api-spec run codegen`. |
+| API client | `@workspace/api-client-react` | Auto-generated React Query hooks for the frontend. |
+| API server | `@workspace/api-server` | Express routes for `/practice/*` and `/openai/*`. |
+| Frontend | `@workspace/english-practice` | Vite + React SPA. State managed with Zustand. |
+
 ## CI / CD (GitHub Actions)
 
-Workflows live under `.github/workflows/` (this folder is inside `English-Practice-Bot/` — use that directory as the **git repository root** when you push to GitHub).
+Workflows live under `.github/workflows/`.
 
 ### CI (`ci.yml`)
 
@@ -128,6 +140,33 @@ git push origin v1.0.0
 
 Deploy those artifacts on your host (VM, container platform, etc.) and configure runtime env (`DATABASE_URL`, OpenAI keys, `PORT`) on the server.
 
-### Monorepo note
+## Voice AI Architecture & Optimization
 
-If your git root is **above** `English-Practice-Bot/` (e.g. a parent folder holds multiple projects), move `.github` to that repository root and add `defaults.run.working-directory: English-Practice-Bot` to each job, or run CI only from a dedicated repo whose root is `English-Practice-Bot/`.
+The application uses a highly optimized, cascaded AI pipeline designed for low latency and minimal operational costs.
+
+### 1. The Voice Pipeline (Cascaded Model)
+
+Instead of using expensive all-in-one Speech-to-Speech models, this project implements a **Cascaded Pipeline** inspired by industry standards (like LiveKit Agents):
+
+- **STT (Speech-to-Text)**: Uses `whisper-1` to convert user audio blobs into text.
+- **LLM (Language Model)**: Uses `gpt-4o-mini` (streaming) to process the conversation context and generate responses.
+- **Sentence Tokenizer**: A custom logic that detects sentence boundaries (`.`, `!`, `?`) in the streaming LLM output.
+- **TTS (Text-to-Speech)**: Uses `tts-1` with `pcm` output format. The system synthesizes audio **per sentence** rather than waiting for the entire response.
+
+**Why this is effective:**
+- **Cost Reduction**: This architecture is approximately **10–15x cheaper** than using `gpt-4o-audio-preview` for the same conversation length.
+- **Perceived Latency**: Because audio is generated and streamed per sentence, the AI starts speaking almost immediately after the first sentence is generated, even if the rest of the response is still being processed by the LLM.
+
+### 2. In-Memory Context Management
+
+To keep the system responsive and minimize database overhead, we use an **In-Memory Context Store** (`voiceContextStore`):
+
+- **Zero DB Reads per Turn**: After the practice session is initialized, the full conversation history (system prompt + prior turns) is kept in a specialized Map in RAM. This eliminates the need to query PostgreSQL for every single voice interaction.
+- **Async Persistence**: User and AI transcripts are persisted to the database asynchronously ("fire-and-forget"). This ensures the user receives the AI response as quickly as possible without waiting for DB write confirmation.
+- **Context Capping**: The history sent to OpenAI is capped at the last 10 turns (20 messages) plus the system prompt. This prevents unbounded token growth and maintains consistent costs for long sessions.
+
+### 3. User Experience Features
+
+- **Barge-in (Interruptible AI)**: The system supports real-time interruptions. The frontend monitor allows the user to click the microphone button while the AI is still speaking (the button turns amber to signify this state). This immediately aborts the server-side stream and silences the local audio playback, allowing for a more natural back-and-forth flow.
+- **Real-time Transcripts**: Both user and assistant transcripts are streamed back to the UI via Server-Sent Events (SSE) as they are generated.
+

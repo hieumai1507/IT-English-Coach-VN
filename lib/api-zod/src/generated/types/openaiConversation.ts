@@ -7,7 +7,9 @@
  */
 
 export interface OpenaiConversation {
-  id: number;
+  id: string;
   title: string;
   createdAt: Date;
+  updatedAt: Date;
+  deletedAt?: Date | null;
 }

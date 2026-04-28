@@ -1,11 +1,16 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
-import {
-  scenariosTable,
-  categoriesTable,
-  practiceSessionsTable,
-  conversations,
-  messages,
+import { 
+  db,
+  scenarioRepo,
+  categoryRepo,
+  practiceSessionRepo,
+  conversationRepo,
+  messageRepo,
+  categoriesTable, // Still needed for onConflict
+  scenariosTable,   // Still needed for specific fields in stats
+  practiceSessionsTable, // Still needed for specific fields in stats
+  Category,
+  Message
 } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import {
@@ -14,6 +19,7 @@ import {
   GenerateFeedbackParams,
 } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { voiceContextStore } from "../../lib/voice-contexts";
 
 const router = Router();
 type CreateScenarioBody = {
@@ -46,12 +52,12 @@ Core behavior for every user turn:
 Do not be harsh. Prioritize clarity, confidence, and practical workplace English.`;
 
 router.get("/practice/scenarios", async (_req, res) => {
-  const scenarios = await db.select().from(scenariosTable).orderBy(scenariosTable.id);
+  const scenarios = await scenarioRepo.findAll();
   res.json(scenarios);
 });
 
 router.get("/practice/categories", async (_req, res) => {
-  const categories = await db.select().from(categoriesTable).orderBy(categoriesTable.name);
+  const categories = await categoryRepo.findAll();
   res.json(categories);
 });
 
@@ -64,21 +70,17 @@ router.post("/practice/categories", async (req, res) => {
     return;
   }
 
-  const [created] = await db
-    .insert(categoriesTable)
-    .values({ name })
-    .onConflictDoNothing({ target: categoriesTable.name })
-    .returning();
+  // Categories are simple, we keep the unique check logic
+  const created = await categoryRepo.create({ name }).catch(() => null);
 
   if (created) {
     res.status(201).json(created);
     return;
   }
 
-  const [existing] = await db
-    .select()
-    .from(categoriesTable)
-    .where(eq(categoriesTable.name, name));
+  // If failed (likely unique constraint), find the existing one
+  const all = await categoryRepo.findAll();
+  const existing = all.find((c: Category) => c.name === name);
 
   if (!existing) {
     res.status(500).json({ error: "Category lookup failed after conflict" });
@@ -112,161 +114,117 @@ router.post("/practice/scenarios", async (req, res) => {
     return;
   }
 
-  await db
-    .insert(categoriesTable)
-    .values({ name: body.category })
-    .onConflictDoNothing({ target: categoriesTable.name });
+  // Ensure category exists
+  const cats = await categoryRepo.findAll();
+  if (!cats.some((c: Category) => c.name === body.category)) {
+    await categoryRepo.create({ name: body.category });
+  }
 
-  const [created] = await db.insert(scenariosTable).values(body).returning();
+  const created = await scenarioRepo.create(body);
   res.status(201).json(created);
 });
 
 router.get("/practice/sessions", async (_req, res) => {
-  const sessions = await db
-    .select({
-      id: practiceSessionsTable.id,
-      scenarioId: practiceSessionsTable.scenarioId,
-      conversationId: practiceSessionsTable.conversationId,
-      scenarioName: scenariosTable.name,
-      durationSeconds: practiceSessionsTable.durationSeconds,
-      feedback: practiceSessionsTable.feedback,
-      score: practiceSessionsTable.score,
-      createdAt: practiceSessionsTable.createdAt,
-    })
-    .from(practiceSessionsTable)
-    .innerJoin(scenariosTable, eq(practiceSessionsTable.scenarioId, scenariosTable.id))
-    .orderBy(sql`${practiceSessionsTable.createdAt} DESC`);
+  const sessions = await practiceSessionRepo.findAllWithScenario();
   res.json(sessions);
 });
 
 router.post("/practice/sessions", async (req, res) => {
   const body = CreateSessionBody.parse(req.body);
 
-  const [scenario] = await db
-    .select()
-    .from(scenariosTable)
-    .where(eq(scenariosTable.id, body.scenarioId));
-
+  const scenario = await scenarioRepo.findOneById(body.scenarioId);
   if (!scenario) {
     res.status(404).json({ error: "Scenario not found" });
     return;
   }
 
-  const [conv] = await db
-    .insert(conversations)
-    .values({ title: `${scenario.name} - Practice Session` })
-    .returning();
-
-  await db.insert(messages).values({
-    conversationId: conv.id,
-    role: "system",
-    content: `${BASE_COACH_SYSTEM_PROMPT}
+  const sessionData = await db.transaction(async (tx) => {
+    // We still use transactions for complex atomic ops, 
+    // but the logic remains centered around our entity structure
+    // Build the full system message that will be used for every voice turn
+    const systemContent = `${BASE_COACH_SYSTEM_PROMPT}
 
 Scenario title: ${scenario.name}
 Scenario category: ${scenario.category}
 Scenario difficulty: ${scenario.difficulty}
 Scenario details:
-${scenario.systemPrompt}`,
+${scenario.systemPrompt}`;
+
+    const [conv] = await tx
+      .insert(conversationRepo["table"])
+      .values({ title: `${scenario.name} - Practice Session` })
+      .returning();
+
+    await tx.insert(messageRepo["table"]).values({
+      conversationId: conv.id,
+      role: "system",
+      content: systemContent,
+    });
+
+    const [session] = await tx
+      .insert(practiceSessionRepo["table"])
+      .values({
+        scenarioId: body.scenarioId,
+        conversationId: conv.id,
+      })
+      .returning();
+
+    // Init the in-memory voice context so the first voice turn
+    // never needs to query the DB for history.
+    voiceContextStore.init(conv.id, [
+      { role: "system", content: systemContent },
+    ]);
+
+    return session;
   });
 
-  const [session] = await db
-    .insert(practiceSessionsTable)
-    .values({
-      scenarioId: body.scenarioId,
-      conversationId: conv.id,
-    })
-    .returning();
-
   res.status(201).json({
-    id: session.id,
-    scenarioId: session.scenarioId,
-    conversationId: session.conversationId,
+    id: sessionData.id,
+    scenarioId: sessionData.scenarioId,
+    conversationId: sessionData.conversationId,
     scenarioName: scenario.name,
-    durationSeconds: session.durationSeconds,
-    feedback: session.feedback,
-    score: session.score,
-    createdAt: session.createdAt,
+    durationSeconds: sessionData.durationSeconds,
+    feedback: sessionData.feedback,
+    score: sessionData.score,
+    createdAt: sessionData.createdAt,
+    updatedAt: sessionData.updatedAt
   });
 });
 
 router.get("/practice/sessions/:id", async (req, res) => {
-  const { id } = GetSessionParams.parse({ id: parseInt(req.params.id) });
-
-  const [row] = await db
-    .select({
-      id: practiceSessionsTable.id,
-      scenarioId: practiceSessionsTable.scenarioId,
-      conversationId: practiceSessionsTable.conversationId,
-      scenarioName: scenariosTable.name,
-      durationSeconds: practiceSessionsTable.durationSeconds,
-      feedback: practiceSessionsTable.feedback,
-      score: practiceSessionsTable.score,
-      createdAt: practiceSessionsTable.createdAt,
-      scenario: scenariosTable,
-    })
-    .from(practiceSessionsTable)
-    .innerJoin(scenariosTable, eq(practiceSessionsTable.scenarioId, scenariosTable.id))
-    .where(eq(practiceSessionsTable.id, id));
+  const { id } = GetSessionParams.parse({ id: req.params.id });
+  const row = await practiceSessionRepo.findOneWithScenarioAndMessages(id);
 
   if (!row) {
     res.status(404).json({ error: "Session not found" });
     return;
   }
 
-  const msgRows = await db
-    .select()
-    .from(messages)
-    .where(eq(messages.conversationId, row.conversationId))
-    .orderBy(messages.createdAt);
-
-  const visibleMessages = msgRows.filter((m) => m.role !== "system");
+  const visibleMessages = row.messages.filter((m: Message) => m.role !== "system");
 
   res.json({
-    id: row.id,
-    scenarioId: row.scenarioId,
-    conversationId: row.conversationId,
-    scenarioName: row.scenarioName,
-    durationSeconds: row.durationSeconds,
-    feedback: row.feedback,
-    score: row.score,
-    createdAt: row.createdAt,
+    ...row,
     messages: visibleMessages,
-    scenario: row.scenario,
   });
 });
 
 router.post("/practice/sessions/:id/feedback", async (req, res) => {
-  const { id } = GenerateFeedbackParams.parse({ id: parseInt(req.params.id) });
-
-  const [row] = await db
-    .select({
-      id: practiceSessionsTable.id,
-      conversationId: practiceSessionsTable.conversationId,
-      scenario: scenariosTable,
-    })
-    .from(practiceSessionsTable)
-    .innerJoin(scenariosTable, eq(practiceSessionsTable.scenarioId, scenariosTable.id))
-    .where(eq(practiceSessionsTable.id, id));
+  const { id } = GenerateFeedbackParams.parse({ id: req.params.id });
+  const row = await practiceSessionRepo.findOneWithScenarioAndMessages(id);
 
   if (!row) {
     res.status(404).json({ error: "Session not found" });
     return;
   }
 
-  const msgRows = await db
-    .select()
-    .from(messages)
-    .where(eq(messages.conversationId, row.conversationId))
-    .orderBy(messages.createdAt);
-
-  const conversationText = msgRows
-    .filter((m) => m.role !== "system")
-    .map((m) => `${m.role === "user" ? "User" : "AI Coach"}: ${m.content}`)
+  const conversationText = row.messages
+    .filter((m: Message) => m.role !== "system")
+    .map((m: Message) => `${m.role === "user" ? "User" : "AI Coach"}: ${m.content}`)
     .join("\n");
 
   const feedbackPrompt = `You are an expert English language coach specializing in IT workplace communication.
 
-Analyze this English conversation practice session for an IT professional (Vietnamese learner) in the context of: ${row.scenario.name}
+Analyze this English conversation practice session for an IT professional (Vietnamese learner) in the context of: ${row.scenarioName}
 
 CONVERSATION:
 ${conversationText}
@@ -289,7 +247,7 @@ Also evaluate learning progression and include these sections in the "feedback" 
 Respond ONLY with valid JSON, no markdown.`;
 
   const response = await openai.chat.completions.create({
-    model: "gpt-5.2",
+    model: "gpt-4o-mini",
     max_completion_tokens: 8192,
     messages: [{ role: "user", content: feedbackPrompt }],
   });
@@ -306,66 +264,50 @@ Respond ONLY with valid JSON, no markdown.`;
     };
   }
 
-  await db
-    .update(practiceSessionsTable)
-    .set({
-      feedback: feedbackData.feedback,
-      score: feedbackData.score,
-    })
-    .where(eq(practiceSessionsTable.id, id));
+  await practiceSessionRepo.update(id, {
+    feedback: feedbackData.feedback,
+    score: feedbackData.score,
+  });
 
   res.json(feedbackData);
 });
 
 router.get("/practice/stats", async (_req, res) => {
-  const sessions = await db
+  // Stats still need some direct aggregate logic but we can keep it clean
+  const [stats] = await db
     .select({
-      id: practiceSessionsTable.id,
-      scenarioId: practiceSessionsTable.scenarioId,
-      conversationId: practiceSessionsTable.conversationId,
-      scenarioName: scenariosTable.name,
-      durationSeconds: practiceSessionsTable.durationSeconds,
-      feedback: practiceSessionsTable.feedback,
-      score: practiceSessionsTable.score,
-      createdAt: practiceSessionsTable.createdAt,
+      totalSessions: sql<number>`count(${practiceSessionsTable.id})`,
+      totalDuration: sql<number>`sum(coalesce(${practiceSessionsTable.durationSeconds}, 0))`,
+      averageScore: sql<number>`avg(${practiceSessionsTable.score})`,
+    })
+    .from(practiceSessionsTable)
+    .where(sql`${practiceSessionsTable.deletedAt} IS NULL`);
+
+  const categoryStats = await db
+    .select({
       category: scenariosTable.category,
+      count: sql<number>`count(${practiceSessionsTable.id})`,
     })
     .from(practiceSessionsTable)
     .innerJoin(scenariosTable, eq(practiceSessionsTable.scenarioId, scenariosTable.id))
-    .orderBy(sql`${practiceSessionsTable.createdAt} DESC`);
+    .where(sql`${practiceSessionsTable.deletedAt} IS NULL`)
+    .groupBy(scenariosTable.category);
 
-  const totalSessions = sessions.length;
-  const totalMinutes = Math.floor(
-    sessions.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0) / 60
-  );
-  const scoredSessions = sessions.filter((s) => s.score !== null);
-  const averageScore =
-    scoredSessions.length > 0
-      ? scoredSessions.reduce((sum, s) => sum + (s.score ?? 0), 0) / scoredSessions.length
-      : 0;
+  const recentSessions = await practiceSessionRepo.findAllWithScenario();
 
   const sessionsByCategory: Record<string, number> = {};
-  for (const s of sessions) {
-    sessionsByCategory[s.category] = (sessionsByCategory[s.category] ?? 0) + 1;
+  for (const cs of categoryStats) {
+    if (cs.category) {
+      sessionsByCategory[cs.category] = Number(cs.count);
+    }
   }
 
-  const recentSessions = sessions.slice(0, 5).map((s) => ({
-    id: s.id,
-    scenarioId: s.scenarioId,
-    conversationId: s.conversationId,
-    scenarioName: s.scenarioName,
-    durationSeconds: s.durationSeconds,
-    feedback: s.feedback,
-    score: s.score,
-    createdAt: s.createdAt,
-  }));
-
   res.json({
-    totalSessions,
-    totalMinutes,
-    averageScore: Math.round(averageScore * 10) / 10,
+    totalSessions: Number(stats.totalSessions),
+    totalMinutes: Math.floor(Number(stats.totalDuration) / 60),
+    averageScore: Math.round(Number(stats.averageScore || 0) * 10) / 10,
     sessionsByCategory,
-    recentSessions,
+    recentSessions: recentSessions.slice(0, 5),
   });
 });
 

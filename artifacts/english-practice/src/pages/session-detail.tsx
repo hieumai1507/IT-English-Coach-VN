@@ -11,13 +11,12 @@ import { useLang } from "@/contexts/language";
 
 export default function SessionDetail() {
   const { t } = useLang();
-  const { id } = useParams<{ id: string }>();
-  const sessionId = parseInt(id ?? "0");
+  const { id: sessionId } = useParams<{ id: string }>();
 
-  const { data: session, isLoading } = useGetSession(sessionId, {
+  const { data: session, isLoading } = useGetSession(sessionId ?? "", {
     query: {
-      enabled: sessionId > 0,
-      queryKey: getGetSessionQueryKey(sessionId),
+      enabled: !!sessionId,
+      queryKey: getGetSessionQueryKey(sessionId ?? ""),
     },
   });
 

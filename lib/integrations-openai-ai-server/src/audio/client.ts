@@ -113,11 +113,12 @@ export async function voiceChat(
   audioBuffer: Buffer,
   voice: "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer" = "alloy",
   inputFormat: "wav" | "mp3" = "wav",
-  outputFormat: "wav" | "mp3" = "mp3"
+  outputFormat: "wav" | "mp3" = "mp3",
+  options?: { signal?: AbortSignal }
 ): Promise<{ transcript: string; audioResponse: Buffer }> {
   const audioBase64 = audioBuffer.toString("base64");
   const response = await openai.chat.completions.create({
-    model: "gpt-audio",
+    model: "gpt-4o-audio-preview",
     modalities: ["text", "audio"],
     audio: { voice, format: outputFormat },
     messages: [{
@@ -126,7 +127,7 @@ export async function voiceChat(
         { type: "input_audio", input_audio: { data: audioBase64, format: inputFormat } },
       ],
     }],
-  });
+  }, options);
   const message = response.choices[0]?.message as any;
   const transcript = message?.audio?.transcript || message?.content || "";
   const audioData = message?.audio?.data ?? "";
@@ -136,11 +137,17 @@ export async function voiceChat(
   };
 }
 
+export type PriorMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
+
 /** Streaming Voice Chat for real-time audio responses. */
 export async function voiceChatStream(
   audioBuffer: Buffer,
   voice: "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer" = "alloy",
-  inputFormat: "wav" | "mp3" = "wav"
+  inputFormat: "wav" | "mp3" = "wav",
+  options?: { signal?: AbortSignal; priorMessages?: PriorMessage[] }
 ): Promise<
   AsyncIterable<
     | { type: "transcript"; data: string }
@@ -149,18 +156,24 @@ export async function voiceChatStream(
   >
 > {
   const audioBase64 = audioBuffer.toString("base64");
+  const priorMessages = options?.priorMessages ?? [];
   const stream = await openai.chat.completions.create({
-    model: "gpt-audio",
+    model: "gpt-4o-audio-preview",
     modalities: ["text", "audio"],
     audio: { voice, format: "pcm16" },
-    messages: [{
-      role: "user",
-      content: [
-        { type: "input_audio", input_audio: { data: audioBase64, format: inputFormat } },
-      ],
-    }],
+    messages: [
+      // Prepend full conversation history (system prompt + prior turns)
+      ...priorMessages.map((m) => ({ role: m.role, content: m.content })),
+      // Current audio turn
+      {
+        role: "user" as const,
+        content: [
+          { type: "input_audio" as const, input_audio: { data: audioBase64, format: inputFormat } },
+        ],
+      },
+    ],
     stream: true,
-  });
+  }, { signal: options?.signal });
 
   return (async function* () {
     for await (const chunk of stream) {
@@ -193,7 +206,7 @@ export async function textToSpeech(
   format: "wav" | "mp3" | "flac" | "opus" | "pcm16" = "wav"
 ): Promise<Buffer> {
   const response = await openai.chat.completions.create({
-    model: "gpt-audio",
+    model: "gpt-4o-audio-preview",
     modalities: ["text", "audio"],
     audio: { voice, format },
     messages: [
@@ -211,7 +224,7 @@ export async function textToSpeechStream(
   voice: "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer" = "alloy"
 ): Promise<AsyncIterable<string>> {
   const stream = await openai.chat.completions.create({
-    model: "gpt-audio",
+    model: "gpt-4o-audio-preview",
     modalities: ["text", "audio"],
     audio: { voice, format: "pcm16" },
     messages: [
@@ -240,7 +253,7 @@ export async function speechToText(
   const file = await toFile(audioBuffer, `audio.${format}`);
   const response = await openai.audio.transcriptions.create({
     file,
-    model: "gpt-4o-mini-transcribe",
+    model: "whisper-1",
   });
   return response.text;
 }
@@ -253,7 +266,7 @@ export async function speechToTextStream(
   const file = await toFile(audioBuffer, `audio.${format}`);
   const stream = await openai.audio.transcriptions.create({
     file,
-    model: "gpt-4o-mini-transcribe",
+    model: "whisper-1",
     stream: true,
   });
 

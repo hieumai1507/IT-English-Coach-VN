@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: english-practice-db
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: english_practice
+    volumes:
+      - english_practice_pgdata:/var/lib/postgresql/data
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/dev.Dockerfile
+    container_name: english-practice-app
+    restart: unless-stopped
+    volumes:
+      - .:/app
+    ports:
+      - "5173:5173" # Vite dev server
+      - "3000:3000" # fallback port for api-server, update if api-server uses different port
+    environment:
+      - NODE_ENV=development
+      - CI=true
+    # Force rebuild node_modules for linux platform, then run dev server
+    command: bash -lc "pnpm install && pnpm dev"
+    depends_on:
+      - postgres
+
+volumes:
+  english_practice_pgdata:
